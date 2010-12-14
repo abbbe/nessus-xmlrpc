@@ -177,7 +177,7 @@ class Scanner:
         try:
             return self._rparse( xml.etree.ElementTree.fromstring(response.replace("\n","")) )
         except Exception:
-            raise ParseError( "Error parsing XML; %s", response )
+            raise ParseError( "Error parsing XML", response )
 
     def login( self, login, password, seq=randint(SEQMIN,SEQMAX) ):
         """
