@@ -25,195 +25,287 @@ from urllib import urlencode
 from random import randint
 from time import sleep
 
+from exceptions import Exception
+
+# Arbitary minimum and maximum values for random sequence num
+SEQMIN = 10000
+SEQMAX = 99999
+
+# Simple exceptions for error handling
+class NessusError(Exception):
+    """
+    Base exception.
+    """
+    def __init__( self, info, contents ):
+        self.info = info
+        self.contents = contents
+
+class RequestError(NessusError):
+    """
+    General requests.
+    """
+    pass
+
+class LoginError(NessusError):
+    """
+    Login.
+    """
+    pass
+
+class PolicyError(NessusError):
+    """
+    Policies.
+    """
+    pass
+
+class ScanError(NessusError):
+    """
+    Scans.
+    """
+    pass
+
+class ReportError(NessusError):
+    """
+    Reports.
+    """
+    pass
+
+class ParseError(NessusError):
+    """
+    Parsing XML.
+    """
+    pass
+
 class Scanner:
-	def __init__( self, host, port, login=None, password=None):
-		"""
-		Initialize the scanner instance by setting up a connection and authenticating
-		if credentials are provided. 
+    def __init__( self, host, port, login=None, password=None):
+        """
+        Initialize the scanner instance by setting up a connection and authenticating
+        if credentials are provided. 
 
-		@type	host:		string
-		@param	host:		The hostname of the running Nessus server.
-		@type	port:		number
-		@param	port:		The port number for the XMLRPC interface on the Nessus server.
-		@type	login:		string
-		@param	login:		The username for logging in to Nessus.
-		@type	password:	string
-		@param	password:	The password for logging in to Nessus.
-		"""
-		self.host = host
-		self.port = port
-		self.connection = self._connect( host, port )
-		self.headers = {"Content-type":"application/x-www-form-urlencoded","Accept":"text/plain"}
+        @type   host:       string
+        @param  host:       The hostname of the running Nessus server.
+        @type   port:       number
+        @param  port:       The port number for the XMLRPC interface on the Nessus server.
+        @type   login:      string
+        @param  login:      The username for logging in to Nessus.
+        @type   password:   string
+        @param  password:   The password for logging in to Nessus.
+        """
+        self.host = host
+        self.port = port
+        self.connection = self._connect( host, port )
+        self.headers = {"Content-type":"application/x-www-form-urlencoded","Accept":"text/plain"}
 
-		if login != None and password != None:
-			self.login( login, password )
-	
-	def _connect( self, host, port ):
-		"""
-		Internal method for connecting to the target Nessus server.
+        if login != None and password != None:
+            self.login( login, password )
+    
+    def _connect( self, host, port ):
+        """
+        Internal method for connecting to the target Nessus server.
 
-		@type	host:	string
-		@param	host:	The hostname of the running Nessus server.
-		@type	port:	number
-		@param	port:	The port number for the XMLRPC interface on the Nessus server.
-		"""
-		self.connection = HTTPSConnection( host, port )
+        @type   host:       string
+        @param  host:       The hostname of the running Nessus server.
+        @type   port:       number
+        @param  port:       The port number for the XMLRPC interface on the Nessus server.
+        """
+        self.connection = HTTPSConnection( host, port )
 
-	def _request( self, method, target, params ):
-		"""
-		Internal method for submitting requests to the target Nessus server, rebuilding
-		the connection if needed.
+    def _request( self, method, target, params ):
+        """
+        Internal method for submitting requests to the target Nessus server, rebuilding
+        the connection if needed.
 
-		@type	method:	string
-		@param	method:	The HTTP verb/method used in the request (almost always POST).
-		@type	target:	string
-		@param	target:	The target path (or function) of the request.
-		@type	params:	string
-		@param	params:	The URL encoded parameters used in the request.
-		"""
-		try:	
-			if self.connection is None:
-				self._connect( self.host, self.port )
-				self.login( self.login, self.password)
-			self.connection.request( method, target, params, self.headers )
-		except CannotSendRequest,ImproperConnectionState:
-			self._connect( self.host, self.port)
-			self.login( self.login, self.password )
-			self._request( method, target, params, self.headers )
-		return self.connection.getresponse().read().replace("\n",'')
+        @type   method:     string
+        @param  method:     The HTTP verb/method used in the request (almost always POST).
+        @type   target:     string
+        @param  target:     The target path (or function) of the request.
+        @type   params:     string
+        @param  params:     The URL encoded parameters used in the request.
+        """
+        try:    
+            if self.connection is None:
+                self._connect( self.host, self.port )
+            self.connection.request( method, target, params, self.headers )
+        except CannotSendRequest,ImproperConnectionState:
+            self._connect( self.host, self.port)
+            self.login( self.login, self.password )
+            self._request( method, target, params, self.headers )
+        return self.connection.getresponse().read()
 
-	def login( self, login, password, seq=randint(1000,9999) ):
-		"""
-		Log in to the Nessus server and preserve the token value for subsequent requests.
+    def _rparse( self, parsed, parent=None):
+        """
+        Recursively parse XML and generate an interable hybrid dictionary/list with all data.
 
-		@type	login:		string
-		@param	login:		The username for logging in to Nessus.
-		@type	password:	string
-		@param	password:	The password for logging in to Nessus.
-		@type	seq:		number
-		@param	seq:		A sequence number that will be echoed back for unique identification (optional).
-		"""
-		self.username = login
-		self.password = password
+        @type   parsed:     xml.etree.ElementTree.Element
+        @param  parsed:     An ElementTree Element object of the parsed XML.
+        @type   parent:     list
+        @param  parent:     Parent element.
+        """
+        result = dict()
+        # Iterate over each element
+        for element in parsed.getchildren():
+            # If the element has children, use a dictionary
+            children = element.getchildren()
+            if len(children) > 0:
+                # We have children for this element
+                if type(result) is list:
+                    # Append the next parse, we're apparently in a list()
+                    result.append(self._rparse( element, parent=parent ))
+                elif type(result) is dict and result.has_key(element.tag):
+                    # Change the dict() to a list() if we have multiple hits
+                    tmp = result
+                    result = list()
+                    # Iterate through the values in the dictionary, adding values only
+                    # - This reduces redundancy in parsed output (no outer tags)
+                    for val in tmp.itervalues():
+                        result.append(val)
+                else:
+                    result[element.tag] = dict()
+                    result[element.tag] = self._rparse( element, parent=result[element.tag] )
+            else:
+                result[element.tag] = element.text
+        return result
+            
+    def parse( self, response ):
+        """
+        Parse the XML response from the server.
 
-                params = urlencode({ 'login':self.username, 'password':self.password, 'seq':seq})
-		response = self._request( "POST", "/login", params )
-                
-		#print "Sent to Parser: %s" % response
-		parsed = xml.etree.ElementTree.fromstring(response)
-		if parsed.find("status").text == "OK":
-			#print "Login succeeded."
-			self.token = parsed.find("contents/token").text
-			#print "Token value: %s" % self.token
-			self.headers["Cookie"] = "token=%s" % self.token
+        @type   response:   string
+        @param  response:   Response XML from the server following a request.
+        """
+        # Okay, for some reason there's a bug with how expat handles newlines
+        try:
+            return self._rparse( xml.etree.ElementTree.fromstring(response.replace("\n","")) )
+        except Exception:
+            raise ParseError( "Error parsing XML; %s", response )
 
-	def logout( self, seq=randint(1000,9999) ):
-		"""
-		Log out of the Nessus server, invalidating the current token value.
+    def login( self, login, password, seq=randint(SEQMIN,SEQMAX) ):
+        """
+        Log in to the Nessus server and preserve the token value for subsequent requests.
 
-		@type	seq:	number
-		@param	seq:	A sequence number that will be echoed back for unique identification (optional).
-		"""
-		params = urlencode( {'seq':seq} )
-		response = self._request( "POST", "/logout", params)
-		
-	def policyList( self, seq=randint(1000,9999) ):
-		"""
-		List the current policies configured on the server and return a dict with the info.
+        @type   login:      string
+        @param  login:      The username for logging in to Nessus.
+        @type   password:   string
+        @param  password:   The password for logging in to Nessus.
+        @type   seq:        number
+        @param  seq:        A sequence number that will be echoed back for unique identification (optional).
+        """
+        self.username = login
+        self.password = password
 
-		@type	seq:	number
-		@param  seq:    A sequence number that will be echoed back for unique identification (optional).
-		"""
-		policies = []
-		count = 0
+        params      = urlencode({ 'login':self.username, 'password':self.password, 'seq':seq})
+        response    = self._request( "POST", "/login", params )
+        parsed      = self.parse( response )
 
-		params = urlencode( {'seq':seq} )
-		response = self._request( "POST", "/policy/list", params)
+        if parsed['status'] == "OK":
+            contents        = parsed['contents']
+            self.token      = contents['token']     # Actual token value
+            self.username   = contents['user']      # User dict (admin status, user name)
+            self.isadmin    = user['admin']         # Is the logged in user an admin?
+        
+            self.headers["Cookie"] = "token=%s" % self.token    # Persist token value for subsequent requests
+        else:
+            raise LoginError( "Unable to login", contents )
 
-		parsed = xml.etree.ElementTree.fromstring(response)
-		if parsed.find("status").text == "OK":
-			for policy in parsed.find("contents/policies").getiterator("policy"):
-				# Look at each policy
-				if len(policies) == count:
-					policies.append({})
-				for element in policy.getchildren():
-					policies[count][element.tag] = element.text
-				count += 1
-		return policies
+    def logout( self, seq=randint(SEQMIN,SEQMAX) ):
+        """
+        Log out of the Nessus server, invalidating the current token value. Returns True if successful, False if not.
 
-	def scanNew( self, scan_name, target, policy_id, seq=randint(1000,9999)):
-		"""
-		Start up a new scan on the Nessus server immediately.
+        @type   seq:        number
+        @param  seq:        A sequence number that will be echoed back for unique identification (optional).
+        """
+        params      = urlencode( {'seq':seq} )
+        response    = self._request( "POST", "/logout", params)
+        parsed      = self.parse( response )
 
-		@type	scan_name:	string
-		@param	scan_name:	The desired name of the scan.
-		@type	target:		string
-		@param	target:		A Nessus-compatible target string (comma separation, CIDR notation, etc.)
-		@type	policy_id:	number
-		@param	policy_id:	The unique ID of the policy to be used in the scan.
-		@type	seq:		number
-		@param	seq:		A sequence number that will be echoed back for unique identification (optional).
-		"""
-		scan = {}
+        if parsed['status'] == "OK" and parsed['contents'] == "OK":
+            return True
+        else:
+            return False
+        
+    def policyList( self, seq=randint(SEQMIN,SEQMAX) ):
+        """
+        List the current policies configured on the server and return a dict with the info.
 
-		params = urlencode( {'target':target,'policy_id':policy_id,'scan_name':scan_name,'seq':seq} )
-		response = self._request( "POST", "/scan/new", params)
+        @type   seq:        number
+        @param  seq:        A sequence number that will be echoed back for unique identification (optional).
+        """
+        params      = urlencode( {'seq':seq} )
+        response    = self._request( "POST", "/policy/list", params)
+        parsed      = self.parse( response )
 
-		parsed = xml.etree.ElementTree.fromstring(response)
-		if parsed.find("status").text == "OK":
-			# Return what you can about the scan.
-			for element in parsed.find("contents/scan").getchildren():
-				scan[element.tag] = element.text
-			return scan
+        if parsed['status'] == "OK":
+            contents = parsed['contents']
+            policies = contents['policies']         # Should be an iterable list of policies
+        else:
+            raise PolicyError( "Unable to get policy list", contents )
+        return policies
 
-	def quickScan( self, scan_name, target, policy_name, seq=randint(1000,9999)):
-		"""
-		Configure a new scan using a canonical name for the policy. Perform a lookup for the policy ID and configure the scan,
-		starting it immediately.
+    def scanNew( self, scan_name, target, policy_id, seq=randint(SEQMIN,SEQMAX)):
+        """
+        Start up a new scan on the Nessus server immediately.
 
-		@type	scan_name:	string
-		@param  scan_name:      The desired name of the scan.
-                @type   target:         string
-                @param  target:         A Nessus-compatible target string (comma separation, CIDR notation, etc.)
-                @type   policy_name:    string
-                @param  policy_name:    The name of the policy to be used in the scan.
-                @type   seq:            number
-                @param  seq:            A sequence number that will be echoed back for unique identification (optional).
-		"""
-		for policy in self.policyList():
-			if policy['policyName'] == policy_name:
-				policy_id = policy['policyID']
-		return self.scanNew( scan_name, target, policy_id )
+        @type   scan_name:  string
+        @param  scan_name:  The desired name of the scan.
+        @type   target:     string
+        @param  target:     A Nessus-compatible target string (comma separation, CIDR notation, etc.)
+        @type   policy_id:  number
+        @param  policy_id:  The unique ID of the policy to be used in the scan.
+        @type   seq:        number
+        @param  seq:        A sequence number that will be echoed back for unique identification (optional).
+        """
+        params      = urlencode( {'target':target,'policy_id':policy_id,'scan_name':scan_name,'seq':seq} )
+        response    = self._request( "POST", "/scan/new", params)
+        parsed      = self.parse( response )
 
-	def reportList( self, seq=randint(1000,9999)):
-		"""
-		Generate a list of reports available on the Nessus server.
+        if parsed['status'] == "OK":
+            contents = parsed['contents']
+            return contents['scan']                 # Return what you can about the scan
+        else:
+            raise ScanError("Unable to start scan", contents )
+            
+    def quickScan( self, scan_name, target, policy_name, seq=randint(SEQMIN,SEQMAX)):
+        """
+        Configure a new scan using a canonical name for the policy. Perform a lookup for the policy ID and configure the scan,
+        starting it immediately.
 
-		@type   seq:            number
-                @param  seq:            A sequence number that will be echoed back for unique identification (optional).
-		"""
-		reports = []
-		count = 0
+        @type   scan_name:   string
+        @param  scan_name:   The desired name of the scan.
+        @type   target:      string
+        @param  target:      A Nessus-compatible target string (comma separation, CIDR notation, etc.)
+        @type   policy_name: string
+        @param  policy_name: The name of the policy to be used in the scan.
+        @type   seq:         number
+        @param  seq:         A sequence number that will be echoed back for unique identification (optional).
+        """
+        for policy in self.policyList():
+            if policy['policyName'] == policy_name:
+                policy_id = policy['policyID']      # Found it!
+        return self.scanNew( scan_name, target, policy_id )
 
-		params = urlencode({'seq':seq})
-		response = self._request( "POST", "/report/list", params)
+    def reportList( self, seq=randint(SEQMIN,SEQMAX)):
+        """
+        Generate a list of reports available on the Nessus server.
 
-		parsed = xml.etree.ElementTree.fromstring(response)
-		if parsed.find("status").text == "OK":
-			for report in parsed.find("contents/reports").getiterator("report"):
-				if len(reports) == count:
-					reports.append({})
-				for element in report.getchildren():
-					reports[count][element.tag] = element.text
-				count += 1
-		return reports
+        @type   seq:        number
+        @param  seq:        A sequence number that will be echoed back for unique identification (optional).
+        """
+        params      = urlencode({'seq':seq})
+        response    = self._request( "POST", "/report/list", params)
+        parsed      = self.parse( response )
 
-	def reportDownload( self, report ):
-		"""
-		Download a report (XML) for a completed scan.
+        if parsed['status'] == "OK":
+            contents = parsed['contents']
+            return contents['reports']              # Return an iterable list of reports
+        else:
+            raise ReportError( "Unable to get reports.", contents )
 
-		@type	report:	string
-		@param	report:	The UUID of the report or completed scan.
-		"""
-		params = urlencode({'report':report})
-		return self._request( "POST", "/file/report/download", params )
+    def reportDownload( self, report ):
+        """
+        Download a report (XML) for a completed scan.
+
+        @type   report:     string
+        @param  report:     The UUID of the report or completed scan.
+        """
+        params = urlencode({'report':report})
+        return self._request( "POST", "/file/report/download", params )
