@@ -19,7 +19,7 @@ import sys,subprocess,shlex,os,smtplib,logging,socket,zipfile
 import xml.etree.ElementTree
 import ConfigParser
 
-from NessusXMLRPC import Scanner
+from NessusXMLRPC import Scanner,ParseError
 from optparse import OptionParser
 from random import randint
 from time import sleep
@@ -180,6 +180,10 @@ class Nessus:
 			self.scanner.connection.close()
 			self.scanner.connection = None
 			sleep(self.sleepmax)
+		except ParseError as e:
+                        self.error("%s; %s" % (e.info,e.contents))
+                        self.error("Continuing...")
+                        return False
 		for scan in self.scans_running:
 			try:
 				for report in reports:

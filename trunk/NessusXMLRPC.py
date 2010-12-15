@@ -132,14 +132,12 @@ class Scanner:
             self._request( method, target, params, self.headers )
         return self.connection.getresponse().read()
 
-    def _rparse( self, parsed, parent=None):
+    def _rparse( self, parsed ):
         """
         Recursively parse XML and generate an interable hybrid dictionary/list with all data.
 
         @type   parsed:     xml.etree.ElementTree.Element
         @param  parsed:     An ElementTree Element object of the parsed XML.
-        @type   parent:     list
-        @param  parent:     Parent element.
         """
         result = dict()
         # Iterate over each element
@@ -150,7 +148,7 @@ class Scanner:
                 # We have children for this element
                 if type(result) is list:
                     # Append the next parse, we're apparently in a list()
-                    result.append(self._rparse( element, parent=parent ))
+                    result.append(self._rparse( element ))
                 elif type(result) is dict and result.has_key(element.tag):
                     # Change the dict() to a list() if we have multiple hits
                     tmp = result
@@ -161,7 +159,7 @@ class Scanner:
                         result.append(val)
                 else:
                     result[element.tag] = dict()
-                    result[element.tag] = self._rparse( element, parent=result[element.tag] )
+                    result[element.tag] = self._rparse( element )
             else:
                 result[element.tag] = element.text
         return result
@@ -200,7 +198,7 @@ class Scanner:
         if parsed['status'] == "OK":
             contents        = parsed['contents']
             self.token      = contents['token']     # Actual token value
-            self.username   = contents['user']      # User dict (admin status, user name)
+            user            = contents['user']      # User dict (admin status, user name)
             self.isadmin    = user['admin']         # Is the logged in user an admin?
         
             self.headers["Cookie"] = "token=%s" % self.token    # Persist token value for subsequent requests
