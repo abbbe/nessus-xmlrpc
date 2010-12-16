@@ -298,12 +298,17 @@ class Scanner:
         else:
             raise ReportError( "Unable to get reports.", contents )
 
-    def reportDownload( self, report ):
+    def reportDownload( self, report, version="v2" ):
         """
         Download a report (XML) for a completed scan.
 
         @type   report:     string
         @param  report:     The UUID of the report or completed scan.
+        @type   version:    string
+        @param  version:    The version of the .nessus XML file you wish to download.
         """
-        params = urlencode({'report':report})
+        if version == "v1":
+            params = urlencode({'report':report, 'v1':version })
+        else:
+            params = urlencode({'report':report})
         return self._request( "POST", "/file/report/download", params )

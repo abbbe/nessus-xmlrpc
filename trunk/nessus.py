@@ -404,7 +404,7 @@ if __name__ == "__main__":
 			   options.target is not None and \
 			   options.policy is not None:
 				scan = [{ 'name' : options.name, 'target' : options.target, 'policy' : options.policy }]
-				x = Nessus( configfile, scan )
+				x = Nessus( options.configfile, scan )
 				scans = x.start()
 			else:
 				print "HARD ERROR: Incorrect usage.\n"
