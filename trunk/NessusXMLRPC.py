@@ -276,9 +276,19 @@ class Scanner:
         @type   seq:         number
         @param  seq:         A sequence number that will be echoed back for unique identification (optional).
         """
-        for policy in self.policyList():
+        policies = self.policyList()
+        if type(policies['policy']) is dict:
+            # There appears to be only one configured policy
+            policy = policies['policy']
             if policy['policyName'] == policy_name:
-                policy_id = policy['policyID']      # Found it!
+                policy_id = policy['policyID']
+            else:
+                raise PolicyError( "Unable to parse policies from policyList()", (scan_name,target,policy_name))
+        else:
+            # We have multiple policies configured
+            for policy in policies:
+                if policy['policyName'] == policy_name:
+                    policy_id = policy['policyID']
         return self.scanNew( scan_name, target, policy_id )
 
     def reportList( self, seq=randint(SEQMIN,SEQMAX)):

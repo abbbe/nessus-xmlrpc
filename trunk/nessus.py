@@ -186,10 +186,18 @@ class Nessus:
                         return False
 		for scan in self.scans_running:
 			try:
-				for report in reports:
-					if report['status'] == 'completed' and scan['uuid'] == report['name']:
-						self.scans_complete.append(scan)
+                                if type(reports) is dict:
+                                        # We have only one report
+                                        report = reports['report']
+                                        if report['status'] == 'completed' and scan['uuid'] == report['name']:
+                                                self.scans_complete.append(scan)
 						self.scans_running.remove(scan)
+				elif type(reports) is list:
+                                        # We have multiple reports to look through
+                                        for report in reports:
+                                                if report['status'] == 'completed' and scan['uuid'] == report['name']:
+                                                        self.scans_complete.append(scan)
+                                                        self.scans_running.remove(scan)
 			except KeyError:
 				self.error("KeyError when parsing XML from reportList(); continuing")
 				return False
