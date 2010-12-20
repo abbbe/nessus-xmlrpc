@@ -17,13 +17,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-import sys
+import sys,re
 import xml.etree.ElementTree
 
 from httplib import HTTPSConnection,CannotSendRequest,ImproperConnectionState
 from urllib import urlencode
 from random import randint
 from time import sleep
+from urlparse import urlparse
 
 from exceptions import Exception
 
@@ -304,7 +305,13 @@ class Scanner:
 
         if parsed['status'] == "OK":
             contents = parsed['contents']
-            return contents['reports']              # Return an iterable list of reports
+            reports = contents['reports']
+            if type(reports) is dict:
+                # We've only got one report, put it into a list
+                temp = reports
+                reports = list()
+                reports.append(temp['report'])
+            return reports              # Return an iterable list of reports
         else:
             raise ReportError( "Unable to get reports.", contents )
 
@@ -322,3 +329,49 @@ class Scanner:
         else:
             params = urlencode({'report':report})
         return self._request( "POST", "/file/report/download", params )
+
+    def xsltList( self, seq=randint(SEQMIN,SEQMAX) ):
+        """
+        List the XSL files available for transforming reports on the server.
+
+        @type   seq:        number
+        @param  seq:        A sequence number that will be echoed back for unique identification (optional).
+        """
+        params      = urlencode({'seq':seq})
+        response    = self._request( "POST", "/file/xslt/list", params )
+        parsed      = self.parse( response )
+
+        return parsed['contents']['XSLT']           # Returns iterable list of XSLT files on the server
+
+    def xsltTransform( self, report, xslt ):
+        """
+        Transform the report on the server into a more readable form.
+
+        @type   report:     string
+        @param  report:     UUID of the report you wish to transform using XSL.
+        @type   xslt:       string
+        @param  xslt:       The XSLT file on the server you wish to use to transform the report.
+        """
+        params      = urlencode( { 'report': report, 'xslt': xslt } )
+        response    = self._request( "POST", "/file/xslt", params ).strip().split("\n")
+        fetched     = False
+        generating  = re.compile( "Nessus is formatting the report. Please wait..." ) # Basic matching
+
+        # This is actual HTML, we have to parse it manually
+        # This is also a total hack to get the meta tag to be valid XML
+        response    = response[1].replace(">"," />")
+        parsed      = xml.etree.ElementTree.fromstring( response )
+        parsed      = parsed.attrib['content'].split(";")
+
+        parsed[1]   = parsed[1].strip("url=")
+        parsed      = {'sleep' : parsed[0], 'report' : parsed[1] }
+
+        while fetched is not True:
+            response = None
+            sleep( int(parsed['sleep'])*5 ) # Fuzzy
+            print "Requesting %s, with Params: %s" % (parsed['report'],None)
+            response = self._request( "GET", parsed['report'], None )
+            print response
+            if generating.match(response) is False:
+                fetched = True
+        return response
