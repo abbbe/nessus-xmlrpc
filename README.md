@@ -4,7 +4,7 @@ This is a fork of https://code.google.com/p/nessusxmlrpc/.
 #### nmap_scan.py
 
 This script will perform a full TCP (0-65535) / UDP (top 1000) port scan with nmap, upload the XML output file to 
-Nessus, create a custom policy based on this file and launch a new scan.
+Nessus, create a custom policy based on this file and launch a Nessus scan binded to that new policy.
 
 ```shell
 $ python nmap_scan.py
