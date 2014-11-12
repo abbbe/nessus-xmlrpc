@@ -34,11 +34,27 @@ if len(sys.argv) > 3:
     #Upload nmap scan XML output to Nessus 
     print "[+] Uploading file %s ..." % (filename)
     response = x.uploadFile(filename)
-    
     if response["status"] == "OK":
         print "[+] File successfully uploaded."
         print "[+] Creating new policy ..."
-	policy = json.loads(x.createNmapPolicy("%s - Nmap Import Policy"%(projectname), os.path.basename(filename)))
+
+	policy_name = "%s - Nmap Import Policy"%(projectname)
+	policy_settings = {
+	    "general.Basic.2" : "yes", 
+	    "general.Port+Scanning.0" : 0, 
+	    "general.Port+Scanning.5" : "no", 
+	    "general.Port+Scanning.6" : "no",
+	    "general.Port+Scanning.7" : "no",
+	    "general.Port+Scanning.9" : "no",
+	    "general.Port+Scanning.3" : "no",
+	    "general.Performance.3" : "unlimited",				# Max Simultaneous TCP Sessions Per Host
+	    "general.Performance.4" : "unlimited",				# Max Simultaneous TCP Sessions Per Scan
+	    "preferences.Service+Detection.130" : "All",			#ssl check on all ports
+	    "Filedata.Nmap+(%s)."%(policy_name.replace(" ", "+")) : os.path.basename(filename),
+	    "preferences.Nmap+(%s).274"%(policy_name.replace(" ","+")) : os.path.basename(filename),
+	 
+	}
+	policy = json.loads(x.createPolicy(policy_name, os.path.basename(filename), policy_settings))
         if policy["reply"]["status"] != "OK":
              print "[!] An error occured while creating the policy."
         else:

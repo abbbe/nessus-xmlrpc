@@ -363,7 +363,7 @@ class Scanner:
 	response = self._request("POST", "/file/upload", body, headers)
 	return self.parse(response)
 	
-    def createNmapPolicy(self, name, nmap_file):
+    def createPolicy(self, name, nmap_file, settings):
         
         params = urlencode({
             "general.Basic.0" : name, 
@@ -371,20 +371,9 @@ class Scanner:
 	    "xml" : 1
 	})
         response = json.loads(self._request("POST", "/policy/update", params))
-        if response["reply"]["status"] == "OK":
-		params = urlencode({
-        	    "general.Basic.0" : name, 
-	            "general.Basic.2" : "yes", 
-	            "general.Port+Scanning.0" : 0, 
-	            "general.Port+Scanning.5" : "no", 
-	            "general.Port+Scanning.6" : "no",
-	            "general.Port+Scanning.7" : "no",
-	            "general.Port+Scanning.9" : "no",
-	            "general.Port+Scanning.3" : "no",
-	            "Filedata.Nmap+(%s)."%(name.replace(" ", "+")) : nmap_file,
-	            "preferences.Nmap+(%s).274"%(name.replace(" ","+")) : nmap_file,
-		    "policy_id" : response["reply"]["contents"]["metadata"]["id"]
-		})
+	if response["reply"]["status"] == "OK":
+		settings["policy_id"] = response["reply"]["contents"]["metadata"]["id"]
+		params = urlencode(settings)
 		return self._request("POST", "/policy/update", params)
         else:
             return response
