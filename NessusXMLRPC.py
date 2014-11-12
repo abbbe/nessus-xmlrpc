@@ -363,17 +363,19 @@ class Scanner:
 	response = self._request("POST", "/file/upload", body, headers)
 	return self.parse(response)
 	
-    def createPolicy(self, name, nmap_file, settings):
-        
-        params = urlencode({
-            "general.Basic.0" : name, 
-	    "policy_id" : 0,
+    def createPolicy(self, name="Default Policy"):
+	params = urlencode({
+	    "general.Basic.0" : name, 
+	    "policy_id" : policy_id,
 	    "xml" : 1
 	})
-        response = json.loads(self._request("POST", "/policy/update", params))
-	if response["reply"]["status"] == "OK":
-		settings["policy_id"] = response["reply"]["contents"]["metadata"]["id"]
-		params = urlencode(settings)
-		return self._request("POST", "/policy/update", params)
-        else:
-            return response
+        return self._request("POST", "/policy/update", params)
+
+    def updatePolicy(self, policy_id=0, name="Default Policy", params={}):
+        
+	params["policy_id"] = policy_id
+	return self._request("POST", "/policy/update", urlencode(params))
+
+    def copyPolicy(self, policy_id):
+        params = urlencode({"policy_id":policy_id})
+        return self.parse(self._request("POST", "/policy/copy", params))
