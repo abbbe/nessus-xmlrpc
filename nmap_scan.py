@@ -36,35 +36,35 @@ if len(sys.argv) > 3:
     response = x.uploadFile(filename)
     if response["status"] == "OK":
         print "[+] File successfully uploaded."
-        print "[+] Creating new policy ..."
+        print "[+] Getting policies ..."
+	for policy in x.policyList():
+	    print "\t%s - %s"%(policy["policyID"], policy["policyName"])
 
-	policy_name = "%s - Nmap Import Policy"%(projectname)
-	policy_settings = {
-	    "general.Basic.2" : "yes", 
-	    "general.Port+Scanning.0" : 0, 
-	    "general.Port+Scanning.5" : "no", 
-	    "general.Port+Scanning.6" : "no",
-	    "general.Port+Scanning.7" : "no",
-	    "general.Port+Scanning.9" : "no",
-	    "general.Port+Scanning.3" : "no",
-	    "general.Performance.3" : "unlimited",				# Max Simultaneous TCP Sessions Per Host
-	    "general.Performance.4" : "unlimited",				# Max Simultaneous TCP Sessions Per Scan
-	    "preferences.Service+Detection.130" : "All",			#ssl check on all ports
-	    "Filedata.Nmap+(%s)."%(policy_name.replace(" ", "+")) : os.path.basename(filename),
-	    "preferences.Nmap+(%s).274"%(policy_name.replace(" ","+")) : os.path.basename(filename),
-	 
-	}
-	policy = json.loads(x.createPolicy(policy_name, os.path.basename(filename), policy_settings))
-        if policy["reply"]["status"] != "OK":
-             print "[!] An error occured while creating the policy."
-        else:
-            print "[$] Policy successfully created."
-	    print "[+] Creating new scan ..."
-	    scan = x.scanNew("%s - full TCP, UDP top 1000"%(projectname), targets, policy["reply"]["contents"]["metadata"]["id"])
-	    if "error" in scan:
-                print "[!] An error occured when launching the scan."
+	policy_id = raw_input("\nWhich policy do you want me to use as a template ? :")
+	response = x.copyPolicy(policy_id)
+
+        if response["status"] == "OK":
+	    policy_id = response["contents"]["policy"]["policyID"]
+	    policy_name = "%s - Nmap Import Policy"%(projectname)
+	    policy_settings = {
+		"general.Basic.0" : policy_name,
+	        "Filedata.Nmap+(%s)."%(policy_name.replace(" ", "+")) : os.path.basename(filename),
+	        "preferences.Nmap+(%s).274"%(policy_name.replace(" ","+")) : os.path.basename(filename),
+	    }
+	    
+            policy = json.loads(x.updatePolicy(policy_id, policy_name, policy_settings))	
+            if policy["reply"]["status"] != "OK":
+                print "[!] An error occured while creating the policy."
             else:
-                print "[$] Scan %s has been launched ! Results will be available at https://%s:%d/html5.html#/scans/%s"%(scan["uuid"], server, port, scan["uuid"])
+                print "[$] Policy successfully created."
+	        print "[+] Creating new scan ..."
+	        scan = x.scanNew("%s - full TCP, UDP top 1000"%(projectname), targets, policy["reply"]["contents"]["metadata"]["id"])
+	        if "error" in scan:
+                    print "[!] An error occured when launching the scan."
+                else:
+                    print "[$] Scan %s has been launched ! Results will be available at https://%s:%d/html5.html#/scans/%s"%(scan["uuid"], server, port, scan["uuid"])
+        else:
+	    print "[!] An error occured while copying the policy."
     else:
         print "[!] An error occured while uploading the file."
  
