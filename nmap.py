@@ -394,7 +394,6 @@ if __name__ == "__main__":
 	what worked the best on my test box. The Nessus daemon appears to be touchy when it comes to resources.
 	"""
 	parser = OptionParser()
-	parser.add_option("-t", dest='target', help="target string for Nessus scan")
 	parser.add_option("-n", dest='name', default="No-name Auto Scan", help="name for the scan")
 	parser.add_option("-p", dest='policy', help="policy (on server-side) to use in the scan")
 	parser.add_option("-f", dest='infile', help="input file with multiple scans to run")
@@ -410,9 +409,9 @@ if __name__ == "__main__":
 		x.list_policies()
 		sys.exit(0)	
 	if  options.configfile is not None and \
-		(options.infile is not None or options.target is not None):
+		(options.infile is not None or options.nmap_xml_file is not None):
 
-		if options.infile is not None and options.target is None:
+		if options.infile is not None and options.nmap_xml_file is None:
 			# Start with multiple scans.
 			scans = []
 			f = open(options.infile, "r")
