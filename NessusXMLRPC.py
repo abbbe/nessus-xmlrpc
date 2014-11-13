@@ -315,6 +315,16 @@ class Scanner:
                     policy_id = policy['policyID']
         return self.scanNew( scan_name, target, policy_id )
 
+    def getScanProgress(self, scan_uuid):
+        params = urlencode({"id" : scan_uuid})
+        response = json.loads(self._request("POST", "/result/details", params))
+	current = 0.0
+	total = 0.0 if len(response["reply"]["contents"]["hosts"]) else 1.0 
+        for host in response["reply"]["contents"]["hosts"]:
+	   current += host["scanprogresscurrent"]
+           total += host["scanprogresstotal"]
+	return current/total*100.0
+
     def reportList( self, seq=randint(SEQMIN,SEQMAX)):
         """
         Generate a list of reports available on the Nessus server.
@@ -332,7 +342,7 @@ class Scanner:
         else:
             raise ReportError( "Unable to get reports.", contents )
 
-    def reportDownload( self, report, version="v2" ):
+    def reportDownload( self, report, frmt="nessus.v2" ):
         """
         Download a report (XML) for a completed scan.
 
@@ -341,12 +351,19 @@ class Scanner:
         @type   version:    string
         @param  version:    The version of the .nessus XML file you wish to download.
         """
-        if version == "v1":
-            params = urlencode({'report':report, 'v1':version })
-        else:
-            params = urlencode({'report':report})
-        return self._request( "POST", "/file/report/download", params )
-
+	response = json.loads(self._request("POST", "/result/export", urlencode({"id": report, "format": frmt})))
+	if response["reply"]["status"] == "OK":
+	    rid = response["reply"]["contents"]["file"]
+	    response = json.loads(self._request("POST", "/result/export/status", urlencode({"rid":rid})))
+	    while "reply" not in response or response["reply"]["contents"]["status"] != "ready":
+                sleep(5) 
+	    	response = json.loads(self._request("POST", "/result/export/status", urlencode({"rid":rid})))
+            response = self._request("GET", "/result/export/download?rid=%d"%(rid), "")
+            with open("%d.%s"%(rid,frmt), "wb") as f:
+                f.write(response)
+	    return "%d.%s"%(rid,frmt)
+	else:
+            return None
 
 
     def uploadFile(self, filename):
@@ -379,3 +396,8 @@ class Scanner:
     def copyPolicy(self, policy_id):
         params = urlencode({"policy_id":policy_id})
         return self.parse(self._request("POST", "/policy/copy", params))
+
+    def deletePolicy(self, policy_id):
+        raise Exception("Not yet implemented")
+
+
