@@ -431,6 +431,10 @@ if __name__ == "__main__":
 				print "HARD ERROR: Incorrect usage.\n"
 				parser.print_help()
 				sys.exit(1)
+		else:
+			print "HARD ERROR: Incorrect usage. Please specify one and only one of -f or -x options.\n"
+			parser.print_help()
+			sys.exit(1)
 		while not x.iscomplete():
 			time.sleep(30)
 		x.report()
