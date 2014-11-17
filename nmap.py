@@ -416,7 +416,7 @@ if __name__ == "__main__":
 			scans = []
 			f = open(options.infile, "r")
 			for line in f:
-				scan = line.strip().split(',')
+				scan = line.strip().split(',') # XXX fixme, this will break if policy name contains commas
 				scans.append({'name':scan[0],'nmap_xml_file':scan[1],'policy':scan[2]})
 			x = Nessus( options.configfile, scans )
 			scans = x.start()
